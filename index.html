@@ -91,6 +91,7 @@
   .veredicto-inocente { background: rgba(26,92,26,0.08); color: var(--green-verdict); border: 1px solid rgba(26,92,26,0.25); }
   .veredicto-expirada { background: rgba(100,100,100,0.08); color: #555; border: 1px solid rgba(100,100,100,0.25); }
   .regla-box { background: rgba(139,26,26,0.05); border: 1px solid rgba(139,26,26,0.2); padding: 0.75rem 1rem; margin-bottom: 1.5rem; font-size: 0.82rem; color: var(--ink-faded); font-style: italic; text-align: center; line-height: 1.6; }
+  .ya-votado { font-family: 'IM Fell English SC', serif; font-size: 0.82rem; letter-spacing: 1px; padding: 0.5rem 0.75rem; border: 1px solid rgba(139,105,20,0.4); color: var(--ink-light); display: inline-block; margin-top: 0.5rem; }
   .constitution-text { font-size: 0.92rem; line-height: 1.9; color: var(--ink-faded); }
   .constitution-article { margin-bottom: 1.5rem; }
   .constitution-article-title { font-family: 'IM Fell English SC', serif; font-size: 0.95rem; letter-spacing: 2px; color: var(--ink); margin-bottom: 0.5rem; }
@@ -103,7 +104,7 @@
   .divider { border: none; border-top: 1px solid var(--border-ornate); margin: 1.25rem 0; }
   .loading { text-align: center; font-style: italic; color: var(--ink-light); padding: 2rem; font-size: 0.9rem; }
   .empty { text-align: center; font-style: italic; color: var(--ink-light); padding: 2rem; font-size: 0.88rem; }
-  .toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--gold-light); font-family: 'IM Fell English SC', serif; letter-spacing: 2px; font-size: 0.85rem; padding: 0.75rem 2rem; border: 1px solid var(--gold); z-index: 2000; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
+  .toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--gold-light); font-family: 'IM Fell English SC', serif; letter-spacing: 2px; font-size: 0.85rem; padding: 0.75rem 2rem; border: 1px solid var(--gold); z-index: 2000; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
   .toast.show { opacity: 1; }
   @media (max-width: 600px) {
     nav button { padding: 0.75rem 0.8rem; font-size: 0.72rem; letter-spacing: 1px; }
@@ -240,6 +241,18 @@ let activeProposalId = null;
 let allTraiciones = [];
 let cachedVotos = [];
 
+// ── DEVICE ID ─────────────────────────────────────────────
+// Genera un ID único por navegador y lo guarda en localStorage
+function getDeviceId() {
+  let id = localStorage.getItem('tribunal_device_id');
+  if (!id) {
+    id = 'dev_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('tribunal_device_id', id);
+  }
+  return id;
+}
+const DEVICE_ID = getDeviceId();
+
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -371,6 +384,11 @@ function renderProposals(propuestas, votos) {
 
   const statusLabels = { abierta:'Causa Abierta', culpable:'Traición Confirmada', absuelta:'Causa Absuelta', expirada:'Plazo Expirado' };
   const statusClasses = { abierta:'status-abierta', culpable:'status-culpable', absuelta:'status-absuelta', expirada:'status-expirada' };
+  const veredictos = {
+    culpable: `<div class="veredicto-banner veredicto-culpable">✗ Traición confirmada por el Tribunal — Archivada en el Registro</div>`,
+    absuelta: `<div class="veredicto-banner veredicto-inocente">✓ El acusado ha sido absuelto por el Tribunal</div>`,
+    expirada: `<div class="veredicto-banner veredicto-expirada">El plazo de deliberación ha expirado sin veredicto definitivo</div>`,
+  };
 
   c.innerHTML = propuestas.map(p => {
     const estado = getEstado(p, votos);
@@ -381,11 +399,8 @@ function renderProposals(propuestas, votos) {
     const pct = total > 0 ? Math.round((culp/total)*100) : 0;
     const cd = estado === 'abierta' ? getCountdown(p.created_at) : null;
 
-    const veredictos = {
-      culpable: `<div class="veredicto-banner veredicto-culpable">✗ Traición confirmada por el Tribunal — Archivada en el Registro</div>`,
-      absuelta: `<div class="veredicto-banner veredicto-inocente">✓ El acusado ha sido absuelto por el Tribunal</div>`,
-      expirada: `<div class="veredicto-banner veredicto-expirada">El plazo de deliberación ha expirado sin veredicto definitivo</div>`,
-    };
+    // Comprobar si este dispositivo ya votó en esta causa
+    const yaVoto = pv.find(v => v.device_id === DEVICE_ID);
 
     const safeMotive = p.motivo.replace(/'/g, "\\'").replace(/\n/g, ' ');
     const safeAcusado = p.acusado.replace(/'/g, "\\'");
@@ -417,7 +432,9 @@ function renderProposals(propuestas, votos) {
                 </div>`).join('')}</div>`
             : `<p style="font-size:0.82rem;font-style:italic;color:var(--ink-light);margin-bottom:1rem;">Aún no hay votos emitidos.</p>`}
           ${estado === 'abierta'
-            ? `<button class="btn-primary" onclick="openVoteModal('${p.id}','${safeAcusado}','${safeMotive}')">Emitir Voto</button>`
+            ? yaVoto
+              ? `<div class="ya-votado">Su voto ha sido registrado: ${yaVoto.veredicto === 'culpable' ? '✗ Culpable' : '✓ Inocente'}</div>`
+              : `<button class="btn-primary" onclick="openVoteModal('${p.id}','${safeAcusado}','${safeMotive}')">Emitir Voto</button>`
             : ''}
         </div>
       </div>`;
@@ -449,15 +466,23 @@ async function castVote(veredicto) {
   document.getElementById('btn-culpable').disabled = true;
   document.getElementById('btn-inocente').disabled = true;
 
-  const { data: existing } = await sb.from('votos').select('id').eq('propuesta_id', activeProposalId).ilike('nombre', nombre);
+  // Doble comprobación en servidor: mismo device_id en esta propuesta
+  const { data: existing } = await sb.from('votos').select('id').eq('propuesta_id', activeProposalId).eq('device_id', DEVICE_ID);
   if (existing && existing.length > 0) {
-    showToast('Este ciudadano ya ha emitido su voto en esta causa.');
-    document.getElementById('btn-culpable').disabled = false;
-    document.getElementById('btn-inocente').disabled = false;
+    showToast('Ya ha emitido su voto en esta causa desde este dispositivo.');
+    closeModal();
+    loadProposals();
     return;
   }
 
-  const { error } = await sb.from('votos').insert({ propuesta_id: activeProposalId, nombre, veredicto, razonamiento });
+  const { error } = await sb.from('votos').insert({
+    propuesta_id: activeProposalId,
+    nombre,
+    veredicto,
+    razonamiento,
+    device_id: DEVICE_ID
+  });
+
   if (error) {
     showToast('Error al registrar el voto.');
     document.getElementById('btn-culpable').disabled = false;
