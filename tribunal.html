@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tribunal Supremo de Traiciones — El Consejo</title>
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --parchment: #f5f0e8;
+    --parchment-dark: #e8e0cc;
+    --ink: #1a1208;
+    --ink-faded: #3d3020;
+    --ink-light: #6b5a3e;
+    --red-seal: #8b1a1a;
+    --gold: #c8a84b;
+    --gold-light: #e8c96b;
+    --border-ornate: #8b6914;
+    --green-verdict: #1a5c1a;
+  }
+  body {
+    background: #2a1f0e;
+    font-family: 'Libre Baskerville', Georgia, serif;
+    color: var(--ink);
+    min-height: 100vh;
+  }
+  .header {
+    background: var(--parchment);
+    border-bottom: 4px double var(--border-ornate);
+    padding: 2rem 2rem 1.5rem;
+    text-align: center;
+    background-image: repeating-linear-gradient(0deg, transparent, transparent 30px, rgba(139,105,20,0.05) 30px, rgba(139,105,20,0.05) 31px);
+  }
+  .header::before, .header::after { content: '✦ ✦ ✦'; display: block; color: var(--gold); font-size: 14px; letter-spacing: 8px; margin: 0.5rem 0; }
+  .header-title { font-family: 'IM Fell English SC', serif; font-size: clamp(1.8rem, 5vw, 3rem); color: var(--ink); letter-spacing: 4px; line-height: 1.2; }
+  .header-subtitle { font-family: 'IM Fell English', serif; font-style: italic; font-size: 0.95rem; color: var(--ink-light); margin-top: 0.5rem; letter-spacing: 1px; }
+  .seal { width: 60px; height: 60px; border-radius: 50%; background: var(--red-seal); border: 3px solid #5a0f0f; box-shadow: inset 0 0 8px rgba(0,0,0,0.5); color: #f5d5a0; font-family: 'IM Fell English SC', serif; font-size: 9px; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.1; letter-spacing: 0px; margin: 1rem auto 0; font-weight: bold; }
+  nav { background: var(--ink); display: flex; justify-content: center; border-bottom: 3px solid var(--gold); flex-wrap: wrap; }
+  nav button { background: none; border: none; color: var(--parchment-dark); font-family: 'IM Fell English SC', serif; font-size: 0.82rem; letter-spacing: 2px; padding: 0.85rem 1.5rem; cursor: pointer; border-right: 1px solid #3d3020; transition: all 0.2s; white-space: nowrap; }
+  nav button:last-child { border-right: none; }
+  nav button:hover { background: #2a1f0e; color: var(--gold); }
+  nav button.active { background: #2a1f0e; color: var(--gold-light); border-bottom: 3px solid var(--gold-light); }
+  main { max-width: 900px; margin: 2rem auto; padding: 0 1rem 4rem; }
+  .page { display: none; }
+  .page.active { display: block; }
+  .panel { background: var(--parchment); border: 2px solid var(--border-ornate); padding: 2rem; margin-bottom: 1.5rem; position: relative; background-image: repeating-linear-gradient(0deg, transparent, transparent 28px, rgba(139,105,20,0.06) 28px, rgba(139,105,20,0.06) 29px); }
+  .panel::before { content: ''; position: absolute; top: 6px; left: 6px; right: 6px; bottom: 6px; border: 1px solid rgba(139,105,20,0.3); pointer-events: none; }
+  .section-title { font-family: 'IM Fell English SC', serif; font-size: 1.3rem; color: var(--ink); letter-spacing: 3px; border-bottom: 2px solid var(--border-ornate); padding-bottom: 0.75rem; margin-bottom: 1.5rem; text-align: center; }
+  .year-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; justify-content: center; }
+  .year-tab { background: var(--parchment-dark); border: 1px solid var(--border-ornate); color: var(--ink-faded); font-family: 'IM Fell English SC', serif; font-size: 0.85rem; padding: 0.4rem 1rem; cursor: pointer; letter-spacing: 1px; transition: all 0.2s; }
+  .year-tab:hover, .year-tab.active { background: var(--ink); color: var(--gold-light); border-color: var(--gold); }
+  .traitor-card { border: 1px solid var(--border-ornate); margin-bottom: 1rem; background: rgba(245,240,232,0.5); }
+  .traitor-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 1px solid rgba(139,105,20,0.3); cursor: pointer; transition: background 0.2s; }
+  .traitor-header:hover { background: var(--parchment-dark); }
+  .traitor-name { font-family: 'IM Fell English SC', serif; font-size: 1.1rem; color: var(--ink); letter-spacing: 2px; }
+  .traitor-count { background: var(--red-seal); color: #f5d5a0; font-family: 'IM Fell English SC', serif; font-size: 0.85rem; padding: 0.25rem 0.75rem; letter-spacing: 1px; flex-shrink: 0; }
+  .traitor-body { padding: 0 1.25rem; max-height: 0; overflow: hidden; transition: max-height 0.4s ease, padding 0.3s; }
+  .traitor-body.open { max-height: 2000px; padding: 1rem 1.25rem; }
+  .treason-item { border-left: 3px solid var(--red-seal); padding: 0.75rem 1rem; margin-bottom: 0.75rem; background: rgba(139,26,26,0.04); }
+  .treason-date { font-size: 0.75rem; color: var(--ink-light); font-style: italic; margin-bottom: 0.25rem; }
+  .treason-motive { font-size: 0.9rem; color: var(--ink-faded); line-height: 1.5; margin-bottom: 0.5rem; }
+  .votes-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+  .vote-badge { font-size: 0.72rem; padding: 0.2rem 0.6rem; border: 1px solid; font-family: 'IM Fell English SC', serif; letter-spacing: 0.5px; cursor: default; }
+  .vote-culpable { border-color: var(--red-seal); color: var(--red-seal); background: rgba(139,26,26,0.06); }
+  .vote-inocente { border-color: var(--green-verdict); color: var(--green-verdict); background: rgba(26,92,26,0.06); }
+  .form-group { margin-bottom: 1.25rem; }
+  .form-label { display: block; font-family: 'IM Fell English SC', serif; font-size: 0.85rem; letter-spacing: 2px; color: var(--ink-faded); margin-bottom: 0.4rem; }
+  .form-input, .form-textarea, .form-select { width: 100%; background: rgba(255,255,255,0.6); border: 1px solid var(--border-ornate); padding: 0.6rem 0.85rem; font-family: 'Libre Baskerville', serif; font-size: 0.9rem; color: var(--ink); outline: none; transition: border-color 0.2s; }
+  .form-input:focus, .form-textarea:focus { border-color: var(--red-seal); background: rgba(255,255,255,0.85); }
+  .form-textarea { min-height: 100px; resize: vertical; }
+  .btn-primary { background: var(--ink); color: var(--gold-light); border: 2px solid var(--gold); font-family: 'IM Fell English SC', serif; font-size: 0.9rem; letter-spacing: 3px; padding: 0.75rem 2rem; cursor: pointer; transition: all 0.2s; display: block; width: 100%; text-align: center; }
+  .btn-primary:hover { background: var(--gold); color: var(--ink); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .vote-proposal { border: 2px solid var(--border-ornate); margin-bottom: 1.5rem; background: var(--parchment); position: relative; }
+  .proposal-status { position: absolute; top: -1px; right: 1.5rem; font-family: 'IM Fell English SC', serif; font-size: 0.72rem; letter-spacing: 1px; padding: 0.2rem 0.75rem; }
+  .proposal-status.abierta { background: var(--gold); color: var(--ink); }
+  .proposal-status.cerrada { background: var(--red-seal); color: #f5d5a0; }
+  .proposal-header { padding: 1.25rem 1.5rem 1rem; border-bottom: 1px solid rgba(139,105,20,0.3); }
+  .proposal-accused { font-family: 'IM Fell English SC', serif; font-size: 1.15rem; color: var(--red-seal); letter-spacing: 2px; margin-bottom: 0.25rem; }
+  .proposal-presented { font-size: 0.78rem; color: var(--ink-light); font-style: italic; }
+  .proposal-body { padding: 1rem 1.5rem; }
+  .proposal-motive { font-size: 0.9rem; color: var(--ink-faded); line-height: 1.6; border-left: 3px solid var(--gold); padding-left: 1rem; font-style: italic; margin-bottom: 1.25rem; }
+  .vote-bar-wrap { margin-bottom: 1rem; }
+  .vote-counts { display: flex; justify-content: space-between; font-family: 'IM Fell English SC', serif; font-size: 0.8rem; letter-spacing: 1px; margin-bottom: 0.3rem; }
+  .vote-bar { height: 8px; background: rgba(139,105,20,0.15); border: 1px solid rgba(139,105,20,0.3); overflow: hidden; }
+  .vote-bar-fill { height: 100%; background: var(--red-seal); transition: width 0.5s ease; }
+  .vote-list-item { font-size: 0.82rem; border-bottom: 1px solid rgba(139,105,20,0.15); padding: 0.4rem 0; display: flex; gap: 0.75rem; align-items: baseline; }
+  .vote-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem; }
+  .btn-culpable { flex: 1; background: var(--red-seal); color: #f5d5a0; border: 2px solid #5a0f0f; font-family: 'IM Fell English SC', serif; font-size: 0.85rem; letter-spacing: 2px; padding: 0.6rem 1rem; cursor: pointer; transition: all 0.2s; min-width: 120px; }
+  .btn-culpable:hover { background: #a02020; }
+  .btn-culpable:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-inocente { flex: 1; background: var(--green-verdict); color: #d5f5d5; border: 2px solid #0f3d0f; font-family: 'IM Fell English SC', serif; font-size: 0.85rem; letter-spacing: 2px; padding: 0.6rem 1rem; cursor: pointer; transition: all 0.2s; min-width: 120px; }
+  .btn-inocente:hover { background: #1f6e1f; }
+  .btn-inocente:disabled { opacity: 0.5; cursor: not-allowed; }
+  .constitution-text { font-size: 0.92rem; line-height: 1.9; color: var(--ink-faded); }
+  .constitution-article { margin-bottom: 1.5rem; }
+  .constitution-article-title { font-family: 'IM Fell English SC', serif; font-size: 0.95rem; letter-spacing: 2px; color: var(--ink); margin-bottom: 0.5rem; }
+  .ornament { text-align: center; color: var(--gold); font-size: 1.2rem; letter-spacing: 12px; margin: 1.5rem 0; }
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(26,18,8,0.85); z-index: 1000; align-items: center; justify-content: center; padding: 1rem; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--parchment); border: 3px double var(--border-ornate); max-width: 520px; width: 100%; max-height: 85vh; overflow-y: auto; position: relative; padding: 2rem; background-image: repeating-linear-gradient(0deg, transparent, transparent 28px, rgba(139,105,20,0.06) 28px, rgba(139,105,20,0.06) 29px); }
+  .modal-close { position: absolute; top: 1rem; right: 1rem; background: none; border: 1px solid var(--border-ornate); color: var(--ink-faded); font-size: 1rem; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .auth-notice { background: rgba(139,26,26,0.06); border: 1px solid rgba(139,26,26,0.25); padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.85rem; color: var(--ink-faded); font-style: italic; text-align: center; }
+  .divider { border: none; border-top: 1px solid var(--border-ornate); margin: 1.25rem 0; }
+  .loading { text-align: center; font-style: italic; color: var(--ink-light); padding: 2rem; font-size: 0.9rem; }
+  .empty { text-align: center; font-style: italic; color: var(--ink-light); padding: 2rem; font-size: 0.88rem; }
+  .toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--gold-light); font-family: 'IM Fell English SC', serif; letter-spacing: 2px; font-size: 0.85rem; padding: 0.75rem 2rem; border: 1px solid var(--gold); z-index: 2000; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  @media (max-width: 600px) {
+    nav button { padding: 0.75rem 0.8rem; font-size: 0.72rem; letter-spacing: 1px; }
+    .panel { padding: 1.25rem; }
+    .modal { padding: 1.25rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">Tribunal Supremo de Traiciones</div>
+  <div class="header-subtitle">El Consejo — Registro Oficial & Archivo Histórico</div>
+  <div class="seal">SELLO<br>OFICIAL</div>
+</div>
+
+<nav>
+  <button class="active" onclick="showPage('ranking', this)">Registro</button>
+  <button onclick="showPage('votacion', this)">Causas Abiertas</button>
+  <button onclick="showPage('proponer', this)">Proponer</button>
+  <button onclick="showPage('constitucion', this)">Constitución</button>
+</nav>
+
+<main>
+
+  <!-- RANKING -->
+  <div id="page-ranking" class="page active">
+    <div class="panel">
+      <div class="section-title">Registro de Traidores</div>
+      <div class="year-tabs" id="year-tabs"></div>
+      <div id="traitors-list"><div class="loading">Consultando los archivos del Tribunal...</div></div>
+    </div>
+  </div>
+
+  <!-- VOTACION -->
+  <div id="page-votacion" class="page">
+    <div class="panel">
+      <div class="section-title">Causas Pendientes de Juicio</div>
+      <div id="proposals-list"><div class="loading">Cargando causas abiertas...</div></div>
+    </div>
+  </div>
+
+  <!-- PROPONER -->
+  <div id="page-proponer" class="page">
+    <div class="panel">
+      <div class="section-title">Elevar Acusación ante el Tribunal</div>
+      <div class="auth-notice">El acusador debe identificarse. Su identidad quedará registrada en los archivos perpetuos del Tribunal.</div>
+      <div class="form-group">
+        <label class="form-label">Su Nombre (Acusador)</label>
+        <input type="text" class="form-input" id="prop-acusador" placeholder="Nombre del acusador...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nombre del Acusado</label>
+        <input type="text" class="form-input" id="prop-acusado" placeholder="Nombre del traidor...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Exposición de los Hechos</label>
+        <textarea class="form-textarea" id="prop-motivo" placeholder="Exponga con detalle los motivos de la acusación. Sea preciso y verídico, pues el Tribunal exige rigor..."></textarea>
+      </div>
+      <button class="btn-primary" id="btn-proponer" onclick="submitProposal()">Presentar Acusación ante el Tribunal</button>
+    </div>
+  </div>
+
+  <!-- CONSTITUCION -->
+  <div id="page-constitucion" class="page">
+    <div class="panel">
+      <div class="section-title">Constitución del Tribunal</div>
+      <div class="ornament">— ❧ —</div>
+      <div class="constitution-text">
+        <div class="constitution-article">
+          <div class="constitution-article-title">Artículo I — Del Propósito</div>
+          <p>El presente Tribunal ha sido fundado con el propósito de registrar, juzgar y archivar toda traición cometida por los miembros de El Consejo. Ningún acto de vileza quedará impune ni sin registro.</p>
+        </div>
+        <div class="ornament">· · ·</div>
+        <div class="constitution-article">
+          <div class="constitution-article-title">Artículo II — Del Procedimiento</div>
+          <p>Cualquier ciudadano podrá elevar acusación ante este Tribunal, exponiendo los motivos con claridad y rigor. La comunidad deliberará y emitirá su veredicto mediante voto motivado.</p>
+        </div>
+        <div class="ornament">· · ·</div>
+        <div class="constitution-article">
+          <div class="constitution-article-title">Artículo III — Del Registro</div>
+          <p>Todo veredicto emitido por el Tribunal quedará registrado en los archivos históricos, clasificado por año y accesible a la posteridad. Ningún registro podrá ser alterado ni destruido.</p>
+        </div>
+        <div class="ornament">· · ·</div>
+        <div class="constitution-article">
+          <div class="constitution-article-title">Artículo IV — Pendiente de Redacción</div>
+          <p><em>La constitución completa será incorporada a estos archivos en cuanto sea redactada y ratificada por El Consejo.</em></p>
+        </div>
+      </div>
+      <div class="ornament">— ❧ —</div>
+      <div style="text-align:center;font-style:italic;font-size:0.8rem;color:var(--ink-light);">Firmado y sellado por el Tribunal Supremo de El Consejo</div>
+    </div>
+  </div>
+
+</main>
+
+<!-- MODAL VOTAR -->
+<div class="modal-overlay" id="vote-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="section-title" style="margin-bottom:1.25rem;" id="modal-title">Emitir Voto</div>
+    <div id="modal-content"></div>
+    <hr class="divider">
+    <div class="form-group">
+      <label class="form-label">Su Nombre</label>
+      <input type="text" class="form-input" id="vote-name" placeholder="Nombre del votante...">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Razonamiento</label>
+      <textarea class="form-textarea" id="vote-reason" placeholder="Exponga los motivos de su voto ante el Tribunal..." style="min-height:80px;"></textarea>
+    </div>
+    <div class="vote-actions">
+      <button class="btn-culpable" id="btn-culpable" onclick="castVote('culpable')">Declarar Culpable</button>
+      <button class="btn-inocente" id="btn-inocente" onclick="castVote('inocente')">Declarar Inocente</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://yfthruzqkekyjxrqjakl.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_SW9V9Zc0FOJUv7iNI8akow_p4Y4O0KW';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentYear = new Date().getFullYear();
+let activeProposalId = null;
+let allTraiciones = [];
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function showPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'ranking') loadRanking();
+  if (name === 'votacion') loadProposals();
+}
+
+function formatDate(iso) {
+  const d = new Date(iso);
+  const months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  return `${d.getDate()} de ${months[d.getMonth()]}, ${d.getFullYear()}`;
+}
+
+// ── RANKING ──────────────────────────────────────────────
+
+async function loadRanking() {
+  document.getElementById('traitors-list').innerHTML = '<div class="loading">Consultando los archivos del Tribunal...</div>';
+
+  const { data: traiciones, error: e1 } = await sb.from('traiciones').select('*').order('created_at', { ascending: false });
+  const { data: votos, error: e2 } = await sb.from('votos').select('*');
+
+  if (e1 || e2) {
+    document.getElementById('traitors-list').innerHTML = '<div class="empty">Error al cargar los archivos.</div>';
+    return;
+  }
+
+  allTraiciones = traiciones || [];
+  const allVotos = votos || [];
+
+  const years = [...new Set(allTraiciones.map(t => t.year))].sort((a,b) => b - a);
+  if (!years.includes(currentYear) && years.length > 0) currentYear = years[0];
+
+  renderYearTabs(years);
+  renderTraitorsList(allTraiciones, allVotos);
+}
+
+function renderYearTabs(years) {
+  const container = document.getElementById('year-tabs');
+  if (years.length === 0) { container.innerHTML = ''; return; }
+  container.innerHTML = years.map(y =>
+    `<button class="year-tab ${y === currentYear ? 'active' : ''}" onclick="selectYear(${y}, this)">${y}</button>`
+  ).join('');
+}
+
+function selectYear(year, el) {
+  currentYear = year;
+  document.querySelectorAll('.year-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderTraitorsList(allTraiciones, window._cachedVotos || []);
+}
+
+function renderTraitorsList(traiciones, votos) {
+  window._cachedVotos = votos;
+  const filtered = traiciones.filter(t => t.year === currentYear);
+  const container = document.getElementById('traitors-list');
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty">No hay traiciones registradas para este año.</div>';
+    return;
+  }
+
+  const counts = {};
+  filtered.forEach(t => {
+    if (!counts[t.acusado]) counts[t.acusado] = [];
+    counts[t.acusado].push(t);
+  });
+
+  const sorted = Object.entries(counts).sort((a,b) => b[1].length - a[1].length);
+
+  container.innerHTML = sorted.map(([name, treasons], i) => {
+    const totalCulpable = treasons.reduce((acc, t) => {
+      return acc + votos.filter(v => v.propuesta_id === t.id && v.veredicto === 'culpable').length;
+    }, 0);
+
+    return `
+      <div class="traitor-card">
+        <div class="traitor-header" onclick="toggleTraitor(this)">
+          <div>
+            <div class="traitor-name">${i === 0 ? '† ' : ''}${name}</div>
+            <div style="font-size:0.75rem;color:var(--ink-light);margin-top:3px;font-style:italic;">${totalCulpable} votos de culpabilidad acumulados</div>
+          </div>
+          <div class="traitor-count">${treasons.length} ${treasons.length === 1 ? 'traición' : 'traiciones'}</div>
+        </div>
+        <div class="traitor-body">
+          ${treasons.map(t => {
+            const tv = votos.filter(v => v.propuesta_id === t.id);
+            return `
+              <div class="treason-item">
+                <div class="treason-date">${formatDate(t.created_at)} — Acusado por: ${t.acusador}</div>
+                <div class="treason-motive">${t.motivo}</div>
+                <div class="votes-row">
+                  ${tv.length === 0
+                    ? '<span style="font-size:0.75rem;color:var(--ink-light);font-style:italic;">Sin votos registrados</span>'
+                    : tv.map(v => `<div class="vote-badge vote-${v.veredicto}" title="${v.razonamiento}">${v.veredicto === 'culpable' ? '✗' : '✓'} ${v.nombre}</div>`).join('')
+                  }
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleTraitor(header) {
+  const body = header.nextElementSibling;
+  body.classList.toggle('open');
+}
+
+// ── PROPUESTAS ────────────────────────────────────────────
+
+async function loadProposals() {
+  document.getElementById('proposals-list').innerHTML = '<div class="loading">Cargando causas abiertas...</div>';
+
+  const { data: propuestas, error: e1 } = await sb.from('propuestas').select('*').order('created_at', { ascending: false });
+  const { data: votos, error: e2 } = await sb.from('votos').select('*');
+
+  if (e1 || e2) {
+    document.getElementById('proposals-list').innerHTML = '<div class="empty">Error al cargar las causas.</div>';
+    return;
+  }
+
+  const container = document.getElementById('proposals-list');
+  if (!propuestas || propuestas.length === 0) {
+    container.innerHTML = '<div class="empty">No hay causas abiertas actualmente.</div>';
+    return;
+  }
+
+  container.innerHTML = propuestas.map(p => {
+    const pVotos = (votos || []).filter(v => v.propuesta_id === p.id);
+    const culpable = pVotos.filter(v => v.veredicto === 'culpable').length;
+    const inocente = pVotos.filter(v => v.veredicto === 'inocente').length;
+    const total = pVotos.length;
+    const pct = total > 0 ? Math.round((culpable / total) * 100) : 0;
+
+    return `
+      <div class="vote-proposal">
+        <div class="proposal-status ${p.abierta ? 'abierta' : 'cerrada'}">${p.abierta ? 'Causa Abierta' : 'Cerrada'}</div>
+        <div class="proposal-header">
+          <div class="proposal-accused">${p.acusado}</div>
+          <div class="proposal-presented">Causa presentada por ${p.acusador} · ${formatDate(p.created_at)}</div>
+        </div>
+        <div class="proposal-body">
+          <div class="proposal-motive">${p.motivo}</div>
+          <div class="vote-bar-wrap">
+            <div class="vote-counts">
+              <span style="color:var(--red-seal);">Culpable: ${culpable}</span>
+              <span style="color:var(--ink-light);">${total} votos</span>
+              <span style="color:var(--green-verdict);">Inocente: ${inocente}</span>
+            </div>
+            <div class="vote-bar"><div class="vote-bar-fill" style="width:${pct}%"></div></div>
+          </div>
+          ${pVotos.length > 0 ? `
+            <div style="margin-bottom:1rem;">
+              ${pVotos.map(v => `
+                <div class="vote-list-item">
+                  <span class="vote-badge vote-${v.veredicto}" style="flex-shrink:0;">${v.nombre}</span>
+                  <span style="color:var(--ink-faded);font-style:italic;">"${v.razonamiento}"</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : '<p style="font-size:0.82rem;font-style:italic;color:var(--ink-light);margin-bottom:1rem;">Aún no hay votos emitidos. Sea el primero en pronunciarse.</p>'}
+          ${p.abierta
+            ? `<button class="btn-primary" onclick="openVoteModal('${p.id}', \`${p.acusado}\`, \`${p.motivo.replace(/`/g,"'")}\`)">Emitir Voto</button>`
+            : `<div style="font-family:'IM Fell English SC',serif;font-size:0.78rem;letter-spacing:1px;color:var(--ink-light);border:1px solid var(--border-ornate);padding:0.3rem 0.75rem;display:inline-block;">Causa cerrada · Veredicto archivado</div>`
+          }
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function openVoteModal(id, acusado, motivo) {
+  activeProposalId = id;
+  document.getElementById('modal-title').textContent = acusado;
+  document.getElementById('modal-content').innerHTML = `<p style="font-size:0.85rem;font-style:italic;color:var(--ink-faded);line-height:1.6;">${motivo}</p>`;
+  document.getElementById('vote-name').value = '';
+  document.getElementById('vote-reason').value = '';
+  document.getElementById('btn-culpable').disabled = false;
+  document.getElementById('btn-inocente').disabled = false;
+  document.getElementById('vote-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('vote-modal').classList.remove('open');
+  activeProposalId = null;
+}
+
+async function castVote(veredicto) {
+  const nombre = document.getElementById('vote-name').value.trim();
+  const razonamiento = document.getElementById('vote-reason').value.trim();
+  if (!nombre) { showToast('El Tribunal requiere que se identifique.'); return; }
+  if (!razonamiento) { showToast('Debe exponer el razonamiento de su voto.'); return; }
+
+  document.getElementById('btn-culpable').disabled = true;
+  document.getElementById('btn-inocente').disabled = true;
+
+  const { error } = await sb.from('votos').insert({ propuesta_id: activeProposalId, nombre, veredicto, razonamiento });
+
+  if (error) {
+    showToast('Error al registrar el voto. Inténtelo de nuevo.');
+    document.getElementById('btn-culpable').disabled = false;
+    document.getElementById('btn-inocente').disabled = false;
+    return;
+  }
+
+  closeModal();
+  showToast('Voto registrado en los archivos del Tribunal.');
+  loadProposals();
+}
+
+// ── PROPONER ──────────────────────────────────────────────
+
+async function submitProposal() {
+  const acusador = document.getElementById('prop-acusador').value.trim();
+  const acusado = document.getElementById('prop-acusado').value.trim();
+  const motivo = document.getElementById('prop-motivo').value.trim();
+
+  if (!acusador || !acusado || !motivo) {
+    showToast('El Tribunal requiere todos los campos cumplimentados.');
+    return;
+  }
+
+  const btn = document.getElementById('btn-proponer');
+  btn.disabled = true;
+  btn.textContent = 'Registrando ante el Tribunal...';
+
+  const { error } = await sb.from('propuestas').insert({ acusado, acusador, motivo, abierta: true });
+
+  if (error) {
+    showToast('Error al presentar la acusación. Inténtelo de nuevo.');
+    btn.disabled = false;
+    btn.textContent = 'Presentar Acusación ante el Tribunal';
+    return;
+  }
+
+  document.getElementById('prop-acusador').value = '';
+  document.getElementById('prop-acusado').value = '';
+  document.getElementById('prop-motivo').value = '';
+  btn.disabled = false;
+  btn.textContent = 'Presentar Acusación ante el Tribunal';
+  showToast('La acusación ha sido presentada ante el Tribunal.');
+}
+
+// Init
+loadRanking();
+</script>
+</body>
+</html>
